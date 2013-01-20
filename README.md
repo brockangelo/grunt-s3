@@ -16,6 +16,8 @@ transfers are verified and will produce errors if incomplete.
 * underscore
 * underscore.deferred
 
+You will need to install each of these using npm in your project root: `npm install knox --save-dev`
+
 ## Installation
 
 ```sh
@@ -27,6 +29,8 @@ Then add this line to your project's `Gruntfile.js`:
 ```javascript
 grunt.loadNpmTasks('grunt-s3');
 ```
+
+Then create a `tasks` directory in your project root, and clone the contents of this repository's `tasks` directory to your grunt project (you should have the `tasks/s3.js` in your project and the contents of the `tasks/lib` folder.
 
 ## Configuration
 
