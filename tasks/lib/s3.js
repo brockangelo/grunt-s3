@@ -244,51 +244,69 @@ exports.init = function (grunt) {
       return dfd.resolve(util.format(MSG_DOWNLOAD_DEBUG, client.bucket, src, path.relative(process.cwd(), dest))).promise();
     }
 
-    // Create a local stream we can write the downloaded file to.
-    var file = fs.createWriteStream(dest);
+    client.list({ prefix: src }, function(err, data){
+      //console.log('in the list function now...');
+      for (var i = 0; i < data.Contents.length; i++) {
+        
+        console.log("Key returned by S3: " + data.Contents[i].Key);
+        console.log("Original dest: " + dest);
 
-    // Upload the file to s3.
-    client.getFile(src, function (err, res) {
-      // If there was an upload error or any status other than a 200, we
-      // can assume something went wrong.
-      if (err || res.statusCode !== 200) {
-        return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src, err || res.statusCode));
-      }
+        // store the name of the file found on S3
+        var src_file = data.Contents[i].Key;
+        console.log("src_file is now: " + src_file);
 
-      res
-        .on('data', function (chunk) {
-          file.write(chunk);
-        })
-        .on('error', function (err) {
-          return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src, err));
-        })
-        .on('end', function () {
-          file.end();
+        // rewrite the dest to src + filename
+        
+        var dest_file = dest + src_file.replace(/^.*[\\\/]/, '');
+        console.log("Modified dest: " + dest_file);
 
-          // Read the local file so we can get its md5 hash.
-          fs.readFile(dest, function (err, data) {
-            if (err) {
-              return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src, err));
-            }
-            else {
-              // The etag head in the response from s3 has double quotes around
-              // it. Strip them out.
-              var remoteHash = res.headers.etag.replace(/"/g, '');
+        // Create a local stream we can write the downloaded file to.
+        var file = fs.createWriteStream(dest_file);
 
-              // Get an md5 of the local file so we can verify the download.
-              var localHash = crypto.createHash('md5').update(data).digest('hex');
+        // Download the file from s3.
+        client.getFile(src_file, function (err, res) {
+          // If there was an download error or any status other than a 200, we
+          // can assume something went wrong.
+          if (err || res.statusCode !== 200) {
+            return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src_file, err || res.statusCode));
+          }
 
-              if (remoteHash === localHash) {
-                var msg = util.format(MSG_DOWNLOAD_SUCCESS, src, localHash);
-                dfd.resolve(msg);
-              }
-              else {
-                dfd.reject(makeError(MSG_ERR_CHECKSUM, 'Download', localHash, remoteHash, src));
-              }
-            }
+          res
+            .on('data', function (chunk) {
+              file.write(chunk);
+            })
+            .on('error', function (err) {
+              return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src_file, err));
+            })
+            .on('end', function () {
+              file.end();
+
+              // Read the local file so we can get its md5 hash.
+              fs.readFile(dest_file, function (err, data) {
+                if (err) {
+                  return dfd.reject(makeError(MSG_ERR_DOWNLOAD, src_file, err));
+                }
+                else {
+                  // The etag head in the response from s3 has double quotes around
+                  // it. Strip them out.
+                  var remoteHash = res.headers.etag.replace(/"/g, '');
+
+                  // Get an md5 of the local file so we can verify the download.
+                  var localHash = crypto.createHash('md5').update(data).digest('hex');
+
+                  if (remoteHash === localHash) {
+                    var msg = util.format(MSG_DOWNLOAD_SUCCESS, src_file, localHash);
+                    dfd.resolve(msg);
+                  }
+                  else {
+                    dfd.reject(makeError(MSG_ERR_CHECKSUM, 'Download', localHash, remoteHash, src_file));
+                  }
+                }
+              });
+            });
           });
-        });
-    });
+        }
+      });
 
     return dfd.promise();
   };
